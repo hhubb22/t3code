@@ -46,6 +46,7 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
+import { KIRO_AGENT_ID, kiroSpawnArgs } from "./kiroAcp.ts";
 
 const ACP_REGISTRY_URL = "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json";
 
@@ -1693,6 +1694,17 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       }
       const agentId = settings.agentId.trim();
       if (agentId.length === 0) return { status: "unconfigured" } as const;
+      if (agentId === KIRO_AGENT_ID) {
+        const executableName = settings.commandPath.trim() || "kiro-cli";
+        const executable = resolveExecutable(
+          executableName,
+          platform,
+          environment ?? hostEnvironment,
+        );
+        return executable === undefined
+          ? ({ status: "missing_runner", version: null, distribution: "local" } as const)
+          : ({ status: "ready", agentId, version: null, distribution: "local" } as const);
+      }
       const registry = yield* loadCachedRegistry();
       const agent = registry.agents.find((candidate) => candidate.id === agentId);
       if (agent === undefined) return { status: "not_found", agentId } as const;
@@ -1811,10 +1823,46 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
         yield* validateLocalExecutable(command);
         return {
           distribution: "local",
-          spawn: { command, args: settings.commandArgs, cwd, env, shell: false },
+          spawn: {
+            command,
+            args: kiroSpawnArgs({
+              command,
+              commandArgs: settings.commandArgs,
+              registeredAgent: settings.agentId.trim() === KIRO_AGENT_ID,
+            }),
+            cwd,
+            env,
+            shell: false,
+          },
         } satisfies ResolvedAcpRegistryAgent;
       }
       const agentId = settings.agentId.trim();
+      if (agentId === KIRO_AGENT_ID) {
+        const executableName = settings.commandPath.trim() || "kiro-cli";
+        const env = environment ?? hostEnvironment;
+        const command = resolveExecutable(executableName, platform, env);
+        if (command === undefined) {
+          return yield* new AcpRegistryError({
+            reason: "runner_unavailable",
+            detail: "Kiro CLI is not available on this environment's PATH.",
+          });
+        }
+        yield* validateLocalExecutable(command);
+        return {
+          distribution: "local",
+          spawn: {
+            command,
+            args: kiroSpawnArgs({
+              command,
+              commandArgs: settings.commandArgs,
+              registeredAgent: true,
+            }),
+            cwd,
+            env,
+            shell: false,
+          },
+        } satisfies ResolvedAcpRegistryAgent;
+      }
       if (agentId.length === 0) {
         return yield* new AcpRegistryError({
           reason: "agent_not_configured",

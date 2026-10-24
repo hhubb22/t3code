@@ -97,6 +97,24 @@ export interface AcpSessionRuntimeOptions {
   readonly cwd: string;
   readonly resumeSessionId?: string;
   readonly resumeMethod?: "load" | "resume";
+  /**
+   * Merged into `session/new`. Kiro selects its model here (`_meta.kiro.modelId`)
+   * instead of a later `session/set_model`.
+   */
+  readonly newSessionMeta?: EffectAcpSchema.NewSessionRequest["_meta"] | undefined;
+  /**
+   * Runs after initialize and before `session/load`. Kiro rejects a missing
+   * session from `session/list` and must not fall through to `session/new`.
+   */
+  readonly beforeLoadSession?:
+    | ((input: {
+        readonly sessionId: string;
+        readonly cwd: string;
+        readonly listSessions: (
+          cursor?: string,
+        ) => Effect.Effect<EffectAcpSchema.ListSessionsResponse, EffectAcpErrors.AcpError>;
+      }) => Effect.Effect<void, EffectAcpErrors.AcpError>)
+    | undefined;
   readonly sessionLoadTimeout?: Duration.Input;
   readonly sessionLoadReplayIdleGap?: Duration.Input;
   readonly interruptPromptOnCancel?: boolean;
@@ -2191,6 +2209,23 @@ export const make = Effect.fn("AcpSessionRuntime.make")(function* (
         : {};
       if (options.resumeSessionId) {
         sessionId = options.resumeSessionId;
+        if (options.beforeLoadSession !== undefined) {
+          yield* options.beforeLoadSession({
+            sessionId,
+            cwd: options.cwd,
+            listSessions: (cursor) => {
+              const requestPayload = {
+                cwd: options.cwd,
+                ...(cursor === undefined ? {} : { cursor }),
+              } satisfies EffectAcpSchema.ListSessionsRequest;
+              return runLoggedRequest(
+                "session/list",
+                requestPayload,
+                acp.agent.listSessions(requestPayload),
+              );
+            },
+          });
+        }
         if (
           initializeResult.agentCapabilities?.loadSession === true &&
           options.resumeMethod !== "resume"
@@ -2225,6 +2260,7 @@ export const make = Effect.fn("AcpSessionRuntime.make")(function* (
           cwd: options.cwd,
           mcpServers: sessionMcpServers(initializeResult),
           ...additionalDirectories,
+          ...(options.newSessionMeta === undefined ? {} : { _meta: options.newSessionMeta }),
         } satisfies EffectAcpSchema.NewSessionRequest;
         const created = yield* runLoggedRequest(
           "session/new",
