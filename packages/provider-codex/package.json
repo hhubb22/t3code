@@ -11,6 +11,10 @@
       "types": "./src/testing/index.ts",
       "import": "./src/testing/index.ts"
     },
+    "./server/status": {
+      "types": "./src/server/status.ts",
+      "import": "./src/server/status.ts"
+    },
     "./server/attachmentFiles": {
       "types": "./src/server/attachmentFiles.ts",
       "import": "./src/server/attachmentFiles.ts"

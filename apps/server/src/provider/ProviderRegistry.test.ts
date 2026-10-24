@@ -21,7 +21,6 @@ import * as TestClock from "effect/testing/TestClock";
 import {
   EnvironmentId,
   ClaudeSettings,
-  CodexSettings,
   DEFAULT_SERVER_SETTINGS,
   PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS,
   ProviderDriverKind,
@@ -38,7 +37,6 @@ import { deepMerge } from "@t3tools/shared/Struct";
 import { createModelCapabilities } from "@t3tools/shared/model";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 
-import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from "./CodexProvider.ts";
 import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as AntigravityInstallation from "./AntigravityInstallation.ts";
@@ -86,7 +84,6 @@ const disabledDefaultSlots = (
   );
 
 const defaultClaudeSettings: ClaudeSettings = Schema.decodeSync(ClaudeSettings)({});
-const defaultCodexSettings: CodexSettings = Schema.decodeSync(CodexSettings)({});
 
 process.env.T3CODE_CURSOR_ENABLED = "1";
 
@@ -213,42 +210,6 @@ function layerMockSpawner(
   );
 }
 
-const codexModelCapabilities = createModelCapabilities({
-  optionDescriptors: [
-    selectDescriptor("reasoningEffort", "Reasoning", [
-      { id: "high", label: "High", isDefault: true },
-      { id: "low", label: "Low" },
-    ]),
-    booleanDescriptor("fastMode", "Fast Mode"),
-  ],
-}) satisfies NonNullable<ServerProvider["models"][number]["capabilities"]>;
-
-function makeCodexProbeSnapshot(
-  input: Partial<CodexAppServerProviderSnapshot> = {},
-): CodexAppServerProviderSnapshot {
-  return {
-    version: "1.0.0",
-    account: {
-      account: {
-        type: "chatgpt",
-        email: "test@example.com",
-        planType: "pro",
-      },
-      requiresOpenaiAuth: false,
-    },
-    models: [
-      {
-        slug: "gpt-live-codex",
-        name: "GPT Live Codex",
-        isCustom: false,
-        capabilities: codexModelCapabilities,
-      },
-    ],
-    skills: [],
-    ...input,
-  };
-}
-
 function makeMutableServerSettingsService(
   initial: ContractServerSettings = DEFAULT_SERVER_SETTINGS,
 ) {
@@ -323,109 +284,6 @@ const layerTestNodeServices = Layer.mergeAll(
 it.layer(
   Layer.mergeAll(layerTestNodeServices, ServerSettingsModule.layerTest(), layerTestHttpClient),
 )("ProviderRegistry", (it) => {
-  describe("checkCodexProviderStatus", () => {
-    it.effect("uses the app-server account and model list for provider status", () =>
-      Effect.gen(function* () {
-        const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
-          Effect.succeed(
-            makeCodexProbeSnapshot({
-              skills: [
-                {
-                  name: "github:gh-fix-ci",
-                  path: "/Users/test/.codex/skills/gh-fix-ci/SKILL.md",
-                  enabled: true,
-                  displayName: "CI Debug",
-                  shortDescription: "Debug failing GitHub Actions checks",
-                },
-              ],
-            }),
-          ),
-        );
-        assert.strictEqual(status.status, "ready");
-        assert.strictEqual(status.installed, true);
-        assert.strictEqual(status.version, "1.0.0");
-        assert.strictEqual(status.auth.status, "authenticated");
-        assert.strictEqual(status.auth.type, "chatgpt");
-        assert.strictEqual(status.auth.label, "ChatGPT Pro 20x Subscription");
-        assert.strictEqual(status.auth.email, "test@example.com");
-        assert.deepStrictEqual(status.setup, { canAuthenticate: false, canInstall: false });
-        assert.deepStrictEqual(status.models, [
-          {
-            slug: "gpt-live-codex",
-            name: "GPT Live Codex",
-            isCustom: false,
-            capabilities: codexModelCapabilities,
-          },
-        ]);
-        assert.deepStrictEqual(status.skills, [
-          {
-            name: "github:gh-fix-ci",
-            path: "/Users/test/.codex/skills/gh-fix-ci/SKILL.md",
-            enabled: true,
-            displayName: "CI Debug",
-            shortDescription: "Debug failing GitHub Actions checks",
-          },
-        ]);
-        assert.deepStrictEqual(status.slashCommands.slice(1), [
-          {
-            name: "goal",
-            description: "Set a goal Codex keeps working toward until it is done",
-            input: { hint: "Objective, or pause, resume, clear" },
-          },
-          {
-            name: "feedback",
-            description: "Send this thread and Codex logs to OpenAI",
-            input: { hint: "Describe the issue (optional)" },
-          },
-        ]);
-      }),
-    );
-
-    it.effect("returns unauthenticated when app-server requires OpenAI auth", () =>
-      Effect.gen(function* () {
-        const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
-          Effect.succeed(
-            makeCodexProbeSnapshot({
-              account: {
-                account: null,
-                requiresOpenaiAuth: true,
-              },
-            }),
-          ),
-        );
-
-        assert.strictEqual(status.status, "error");
-        assert.strictEqual(status.auth.status, "unauthenticated");
-        assert.strictEqual(
-          status.message,
-          "Codex CLI is not authenticated. Run `codex login` and try again.",
-        );
-        assert.deepStrictEqual(status.usageLimits?.unavailable, {
-          reason: "probeFailed",
-          message: "Codex CLI is not authenticated. Run `codex login` and try again.",
-        });
-      }),
-    );
-
-    it.effect("returns ready with unknown auth when app-server does not require OpenAI auth", () =>
-      Effect.gen(function* () {
-        const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
-          Effect.succeed(
-            makeCodexProbeSnapshot({
-              account: {
-                account: null,
-                requiresOpenaiAuth: false,
-              },
-            }),
-          ),
-        );
-
-        assert.strictEqual(status.status, "ready");
-        assert.strictEqual(status.auth.status, "unknown");
-      }),
-    );
-  });
-
   describe("ProviderRegistry.layer", () => {
     it("stores workspace skills, commands and options without changing machine metadata", () => {
       const provider = {
