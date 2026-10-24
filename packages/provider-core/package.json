@@ -43,6 +43,10 @@
       "types": "./src/server/IdAllocator.ts",
       "import": "./src/server/IdAllocator.ts"
     },
+    "./server/imageExtension": {
+      "types": "./src/server/imageExtension.ts",
+      "import": "./src/server/imageExtension.ts"
+    },
     "./server/instanceEnvironment": {
       "types": "./src/server/instanceEnvironment.ts",
       "import": "./src/server/instanceEnvironment.ts"
@@ -110,6 +114,10 @@
     "./server/ProviderContinuationRequests": {
       "types": "./src/server/ProviderContinuationRequests.ts",
       "import": "./src/server/ProviderContinuationRequests.ts"
+    },
+    "./server/providerEventBounds": {
+      "types": "./src/server/providerEventBounds.ts",
+      "import": "./src/server/providerEventBounds.ts"
     },
     "./server/ProviderEventLoggers": {
       "types": "./src/server/ProviderEventLoggers.ts",

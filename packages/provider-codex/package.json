@@ -1,0 +1,64 @@
+{
+  "name": "@t3tools/provider-codex",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./server": {
+      "types": "./src/server.ts",
+      "import": "./src/server.ts"
+    },
+    "./server/attachmentFiles": {
+      "types": "./src/server/attachmentFiles.ts",
+      "import": "./src/server/attachmentFiles.ts"
+    },
+    "./server/codexLaunchArgs": {
+      "types": "./src/server/codexLaunchArgs.ts",
+      "import": "./src/server/codexLaunchArgs.ts"
+    },
+    "./server/codexModelOptions": {
+      "types": "./src/server/codexModelOptions.ts",
+      "import": "./src/server/codexModelOptions.ts"
+    },
+    "./server/codexSession": {
+      "types": "./src/server/codexSession.ts",
+      "import": "./src/server/codexSession.ts"
+    },
+    "./server/codexUsageLimits": {
+      "types": "./src/server/codexUsageLimits.ts",
+      "import": "./src/server/codexUsageLimits.ts"
+    },
+    "./server/CodexHomeLayout": {
+      "types": "./src/server/CodexHomeLayout.ts",
+      "import": "./src/server/CodexHomeLayout.ts"
+    },
+    "./server/CodexThreadRevert": {
+      "types": "./src/server/CodexThreadRevert.ts",
+      "import": "./src/server/CodexThreadRevert.ts"
+    },
+    "./server/CodexTurnTokenUsage": {
+      "types": "./src/server/CodexTurnTokenUsage.ts",
+      "import": "./src/server/CodexTurnTokenUsage.ts"
+    },
+    "./server/ProviderTextDeltaCoalescer": {
+      "types": "./src/server/ProviderTextDeltaCoalescer.ts",
+      "import": "./src/server/ProviderTextDeltaCoalescer.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run --config ../../vite.config.ts --dir ."
+  },
+  "dependencies": {
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/provider-core": "workspace:*",
+    "@t3tools/shared": "workspace:*",
+    "effect": "catalog:",
+    "effect-codex-app-server": "workspace:*"
+  },
+  "devDependencies": {
+    "@effect/platform-node": "catalog:",
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

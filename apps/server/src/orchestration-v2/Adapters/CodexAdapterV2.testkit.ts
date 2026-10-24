@@ -1,7 +1,7 @@
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { type ProviderReplayTranscript } from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS, type ProviderReplayTranscript } from "@t3tools/contracts";
 import * as CodexClient from "effect-codex-app-server/client";
 import type * as CodexError from "effect-codex-app-server/errors";
 import * as CodexReplay from "effect-codex-app-server/replay";
@@ -15,6 +15,9 @@ import * as Schema from "effect/Schema";
 
 import * as ServerConfig from "../../config.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
+import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import { ProviderAdapterDriverCreateError } from "@t3tools/provider-core/server/adapterDriver";
 import * as ProviderAdapterRegistry from "../ProviderAdapterRegistry.ts";
@@ -212,6 +215,36 @@ export function layer(input: {
     ServerConfig.ServerConfig,
     makeReplayServerConfig(input.transcript.scenario).pipe(Effect.orDie),
   ).pipe(Layer.provide(NodeServices.layer));
+  const layerProviderHost = Layer.effect(
+    ProviderHost.ProviderHost,
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      return ProviderHost.ProviderHost.of({
+        paths: {
+          cwd: config.cwd,
+          baseDir: config.baseDir,
+          stateDir: config.stateDir,
+          providerStatusCacheDir: config.providerStatusCacheDir,
+          attachmentsDir: config.attachmentsDir,
+        },
+        settings: {
+          get: Effect.succeed(DEFAULT_SERVER_SETTINGS),
+          withSnapshot: (use) => use(DEFAULT_SERVER_SETTINGS),
+          changes: Stream.empty,
+          subscribe: Effect.succeed(Stream.empty),
+        },
+        shouldRunBackgroundWork: () => Effect.succeed(false),
+        resolveAttachmentPath: () => null,
+        credentials: () =>
+          Effect.succeed({
+            binding: { owner: "t3" as const, key: "codex-replay" },
+            get: Effect.succeed(Option.none()),
+            set: () => Effect.void,
+            remove: Effect.void,
+          }),
+      });
+    }),
+  ).pipe(Layer.provide(layerServerConfig));
   const layerRegistry = ProviderAdapterRegistry.layerFromDrivers({
     drivers: [CodexAdapterV2.CodexAdapterV2Driver],
     configMap: {
@@ -224,6 +257,7 @@ export function layer(input: {
       Layer.mergeAll(
         layerReplayClientFactory,
         layerServerConfig,
+        layerProviderHost,
         NodeServices.layer,
         IdAllocator.layer,
       ),

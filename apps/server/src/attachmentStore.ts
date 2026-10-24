@@ -3,63 +3,32 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-import type { ChatAttachment } from "@t3tools/contracts";
 import { htmlRenderFromToolItem, mcpAppFromToolItem } from "@t3tools/shared/toolOutput";
-
 import {
+  ATTACHMENT_ID_PATTERN,
+  PENDING_ATTACHMENT_THREAD_SEGMENT,
+  attachmentIdExtensionSuffix,
+  createAttachmentId,
   normalizeAttachmentRelativePath,
+  parseAttachmentFileExtension,
+  resolveAttachmentPathById,
   resolveAttachmentRelativePath,
-} from "./attachmentPaths.ts";
-import { inferImageExtension, SAFE_IMAGE_FILE_EXTENSIONS } from "./imageMime.ts";
+  toSafeThreadAttachmentSegment,
+} from "@t3tools/provider-codex/server/attachmentFiles";
 
-const ATTACHMENT_FILENAME_EXTENSIONS = [...SAFE_IMAGE_FILE_EXTENSIONS, ".bin"];
-const ATTACHMENT_ID_THREAD_SEGMENT_MAX_CHARS = 80;
-const ATTACHMENT_ID_THREAD_SEGMENT_PATTERN = "[a-z0-9_]+(?:-[a-z0-9_]+)*";
-const ATTACHMENT_ID_UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const ATTACHMENT_ID_FILE_EXTENSION_PATTERN = "[a-z0-9]{1,10}";
-const ATTACHMENT_ID_PATTERN = new RegExp(
-  `^(${ATTACHMENT_ID_THREAD_SEGMENT_PATTERN})-(${ATTACHMENT_ID_UUID_PATTERN})(?:-(${ATTACHMENT_ID_FILE_EXTENSION_PATTERN}))?$`,
-  "i",
-);
+export {
+  PENDING_ATTACHMENT_THREAD_SEGMENT,
+  attachmentFileExtension,
+  attachmentRelativePath,
+  createAttachmentId,
+  parseAttachmentFileExtension,
+  resolveAttachmentPath,
+  resolveAttachmentPathById,
+  toSafeThreadAttachmentSegment,
+} from "@t3tools/provider-codex/server/attachmentFiles";
 
-export const PENDING_ATTACHMENT_THREAD_SEGMENT = "pending";
 const PENDING_ATTACHMENT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const PARTIAL_UPLOAD_MAX_AGE_MS = 60 * 60 * 1000;
-
-export function toSafeThreadAttachmentSegment(threadId: string): string | null {
-  const segment = threadId
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/gi, "-")
-    .replace(/-+/g, "-")
-    .replace(/^[-_]+|[-_]+$/g, "")
-    .slice(0, ATTACHMENT_ID_THREAD_SEGMENT_MAX_CHARS)
-    .replace(/[-_]+$/g, "");
-  if (segment.length === 0) {
-    return null;
-  }
-  return segment === PENDING_ATTACHMENT_THREAD_SEGMENT ? "_pending" : segment;
-}
-
-export function attachmentFileExtension(fileName: string): string {
-  const extension = NodePath.extname(fileName).toLowerCase();
-  // ".part" is reserved for in-flight uploads; a stored "archive.part" would
-  // look stale to sweepStalePendingAttachments and get deleted.
-  if (extension === ".part" || !/^\.[a-z0-9]{1,10}$/.test(extension)) {
-    return ".bin";
-  }
-  return extension;
-}
-
-function attachmentIdExtensionSuffix(extension: string | undefined): string {
-  if (!extension) {
-    return "";
-  }
-  const normalized = extension.replace(/^\./, "").toLowerCase();
-  return new RegExp(`^${ATTACHMENT_ID_FILE_EXTENSION_PATTERN}$`).test(normalized)
-    ? `-${normalized}`
-    : "-bin";
-}
 
 export function createPendingAttachmentId(extension?: string): string {
   return `${PENDING_ATTACHMENT_THREAD_SEGMENT}-${NodeCrypto.randomUUID()}${attachmentIdExtensionSuffix(extension)}`;
@@ -71,22 +40,6 @@ export function parseAttachmentUuid(attachmentId: string): string | null {
     return null;
   }
   return normalizedId.match(ATTACHMENT_ID_PATTERN)?.[2]?.toLowerCase() ?? null;
-}
-
-export function parseAttachmentFileExtension(attachmentId: string): string | null {
-  const normalizedId = normalizeAttachmentRelativePath(attachmentId);
-  if (!normalizedId || normalizedId.includes("/") || normalizedId.includes(".")) {
-    return null;
-  }
-  return normalizedId.match(ATTACHMENT_ID_PATTERN)?.[3]?.toLowerCase() ?? null;
-}
-
-export function createAttachmentId(threadId: string, extension?: string): string | null {
-  const threadSegment = toSafeThreadAttachmentSegment(threadId);
-  if (!threadSegment) {
-    return null;
-  }
-  return `${threadSegment}-${NodeCrypto.randomUUID()}${attachmentIdExtensionSuffix(extension)}`;
 }
 
 export function createDeterministicAttachmentId(
@@ -148,64 +101,6 @@ export function threadHtmlRenderAttachmentIds(
       ? [attachmentId]
       : [];
   });
-}
-
-export function attachmentRelativePath(attachment: ChatAttachment): string | null {
-  switch (attachment.type) {
-    case "image": {
-      const extension = inferImageExtension({
-        mimeType: attachment.mimeType,
-        fileName: attachment.name,
-      });
-      return `${attachment.id}${extension}`;
-    }
-    case "file":
-      return `${attachment.id}${attachmentFileExtension(attachment.name)}`;
-    default:
-      return null;
-  }
-}
-
-export function resolveAttachmentPath(input: {
-  readonly attachmentsDir: string;
-  readonly attachment: ChatAttachment;
-}): string | null {
-  const relativePath = attachmentRelativePath(input.attachment);
-  if (!relativePath) {
-    return null;
-  }
-  return resolveAttachmentRelativePath({
-    attachmentsDir: input.attachmentsDir,
-    relativePath,
-  });
-}
-
-export function resolveAttachmentPathById(input: {
-  readonly attachmentsDir: string;
-  readonly attachmentId: string;
-}): string | null {
-  const normalizedId = normalizeAttachmentRelativePath(input.attachmentId);
-  if (!normalizedId || normalizedId.includes("/") || normalizedId.includes(".")) {
-    return null;
-  }
-  const fileExtension = parseAttachmentFileExtension(normalizedId);
-  if (fileExtension) {
-    const filePath = resolveAttachmentRelativePath({
-      attachmentsDir: input.attachmentsDir,
-      relativePath: `${normalizedId}.${fileExtension.toLowerCase()}`,
-    });
-    return filePath && NodeFS.existsSync(filePath) ? filePath : null;
-  }
-  for (const extension of ATTACHMENT_FILENAME_EXTENSIONS) {
-    const maybePath = resolveAttachmentRelativePath({
-      attachmentsDir: input.attachmentsDir,
-      relativePath: `${normalizedId}${extension}`,
-    });
-    if (maybePath && NodeFS.existsSync(maybePath)) {
-      return maybePath;
-    }
-  }
-  return null;
 }
 
 export type AttachmentClaimPlan =

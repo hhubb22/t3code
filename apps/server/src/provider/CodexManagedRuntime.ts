@@ -1,4 +1,5 @@
 import { resolveManagedCodexHomeLayout } from "./CodexManagedHome.ts";
+import type { CodexEffectiveRuntime } from "@t3tools/provider-codex/server";
 import { CodexSettings, ProviderSetupError, type ProviderInstanceId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -11,13 +12,10 @@ import { resolveSelfInvocation, selfInvocationArgs } from "@t3tools/shared/nodeR
 import * as CodexInstallation from "./CodexInstallation.ts";
 import { makeCodexChatGptAuth } from "./CodexChatGptAuth.ts";
 import { COMMAND_TIMEOUT_MS } from "./CodexManagedTokenProtocol.ts";
-import { materializeCodexShadowHome } from "./Drivers/CodexHomeLayout.ts";
+import { materializeCodexShadowHome } from "@t3tools/provider-codex/server/CodexHomeLayout";
 
-export interface CodexEffectiveRuntime {
-  readonly config: CodexSettings;
-  readonly environment: NodeJS.ProcessEnv;
-  readonly revision: string;
-}
+export type { CodexEffectiveRuntime };
+
 const decodeSettings = Schema.decodeSync(CodexSettings);
 const managedCodexLaunchArgs = (command: string, args: ReadonlyArray<string>) =>
   [

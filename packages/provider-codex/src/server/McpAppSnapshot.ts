@@ -12,8 +12,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Predicate from "effect/Predicate";
 
-import { resolveAttachmentRelativePath } from "../attachmentPaths.ts";
-import { createAttachmentId } from "../attachmentStore.ts";
+import { createAttachmentId, resolveAttachmentRelativePath } from "./attachmentFiles.ts";
 
 const encoder = new TextEncoder();
 

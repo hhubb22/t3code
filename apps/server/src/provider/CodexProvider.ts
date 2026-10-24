@@ -34,7 +34,15 @@ import {
   formatCodexModelName,
 } from "@t3tools/shared/model";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
-import { codexAppServerArgs, resolveCodexLaunchArgs } from "./codexLaunchArgs.ts";
+import {
+  codexAppServerArgs,
+  resolveCodexLaunchArgs,
+} from "@t3tools/provider-codex/server/codexLaunchArgs";
+import {
+  buildCodexInitializeParams,
+  codexAppServerEnvironment,
+  codexDefaultReasoningEffortOverride,
+} from "@t3tools/provider-codex/server/codexSession";
 import {
   buildServerProvider,
   COMPACT_SLASH_COMMAND,
@@ -48,9 +56,8 @@ import {
   codexRateLimitsToLimits,
   type CodexRateLimitSnapshot,
   type CodexResetCreditsSummary,
-} from "./codexUsageLimits.ts";
+} from "@t3tools/provider-codex/server/codexUsageLimits";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import packageJson from "../../package.json" with { type: "json" };
 const isCodexAppServerSpawnError = Schema.is(CodexErrors.CodexAppServerSpawnError);
 const RATE_LIMITS_PROBE_TIMEOUT_MS = 3_000;
 
@@ -70,7 +77,6 @@ const CODEX_APP_SERVER_PROBE_FORCE_KILL_AFTER = "2 seconds" as const;
 const CODEX_CATALOG_REFRESH_TIMEOUT_MS = 3_000;
 const CODEX_CONFIG_PROBE_TIMEOUT_MS = 3_000;
 const CODEX_CATALOG_REFRESH_POLL = "100 millis" as const;
-const CODEX_CLIENT_NAME = "T3 Code";
 // Codex's probe does a full handshake plus account, models, and skills requests, which can
 // legitimately run past the shared 10s AUTH_PROBE_TIMEOUT_MS on a loaded or slow machine
 // (most often reported on Windows). Give Codex its own longer budget instead of raising the
@@ -163,9 +169,11 @@ function codexAccountEmail(account: CodexSchema.V2GetAccountResponse["account"])
   return account.email;
 }
 
-export function codexDefaultReasoningEffortOverride(model: string): "medium" | undefined {
-  return codexModelFamily(model) === "gpt-6-astra" ? "medium" : undefined;
-}
+export {
+  buildCodexInitializeParams,
+  codexAppServerEnvironment,
+  codexDefaultReasoningEffortOverride,
+} from "@t3tools/provider-codex/server/codexSession";
 
 export function mapCodexModelCapabilities(
   model: CodexSchema.V2ModelListResponse__Model,
@@ -439,32 +447,6 @@ const requestCodexChatGptModels = Effect.fn("requestCodexChatGptModels")(functio
     models
   );
 });
-
-/**
- * App-server starts its catalog refresh before `initialize` names the client,
- * so that first fetch goes out as the plain CLI, misses tiers like Sol
- * Ultrafast, and overwrites the shared `models_cache.json`. Naming the
- * originator at spawn closes that race.
- */
-export const codexAppServerEnvironment = (
-  environment: NodeJS.ProcessEnv | undefined,
-): NodeJS.ProcessEnv => ({
-  CODEX_INTERNAL_ORIGINATOR_OVERRIDE: CODEX_CLIENT_NAME,
-  ...environment,
-});
-
-export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
-  return {
-    clientInfo: {
-      name: CODEX_CLIENT_NAME,
-      title: CODEX_CLIENT_NAME,
-      version: packageJson.version,
-    },
-    capabilities: {
-      experimentalApi: true,
-    },
-  };
-}
 
 export const withCodexAppServerClient = Effect.fn("withCodexAppServerClient")(function* (input: {
   readonly binaryPath: string;

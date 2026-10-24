@@ -5,7 +5,7 @@ import {
   completeCodexTurnTokenUsage,
   getCodexTurnAccumulator,
   makeCodexTurnTokenUsageState,
-} from "./CodexTurnTokenUsage.ts";
+} from "@t3tools/provider-codex/server/CodexTurnTokenUsage";
 
 const breakdown = (input: number, cached: number, output: number) => ({
   totalTokens: input + output,
