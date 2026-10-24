@@ -15,6 +15,10 @@
       "types": "./src/server.ts",
       "import": "./src/server.ts"
     },
+    "./server/status": {
+      "types": "./src/server/status.ts",
+      "import": "./src/server/status.ts"
+    },
     "./testing": {
       "types": "./src/testing/index.ts",
       "import": "./src/testing/index.ts"
