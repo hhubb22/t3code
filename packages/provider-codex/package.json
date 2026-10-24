@@ -7,6 +7,10 @@
       "types": "./src/server.ts",
       "import": "./src/server.ts"
     },
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "import": "./src/testing/index.ts"
+    },
     "./server/attachmentFiles": {
       "types": "./src/server/attachmentFiles.ts",
       "import": "./src/server/attachmentFiles.ts"
