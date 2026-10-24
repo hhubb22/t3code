@@ -172,7 +172,7 @@ function acpReplayAgentArgs(scriptPath: string): ReadonlyArray<string> {
 
 export function layerAcpReplaySpawner(
   transcript: ProviderReplayTranscript,
-  options: { readonly statusPath: string },
+  options: { readonly statusPath: string; readonly scriptPath?: string },
 ): Layer.Layer<ChildProcessSpawner.ChildProcessSpawner> {
   return Layer.effect(
     ChildProcessSpawner.ChildProcessSpawner,
@@ -191,7 +191,8 @@ export function layerAcpReplaySpawner(
           ChildProcess.make(
             process.execPath,
             acpReplayAgentArgs(
-              NodeURL.fileURLToPath(new URL("./acp-replay-agent.ts", import.meta.url)),
+              options.scriptPath ??
+                NodeURL.fileURLToPath(new URL("./acp-replay-agent.ts", import.meta.url)),
             ),
             {
               ...command.options,
