@@ -375,7 +375,9 @@ const makeReader = Effect.fnUntraced(function* (options: SqliteClientConfig) {
       if (pending.size === 0) worker.unref();
       request.resume(reply);
     });
-    worker.on("error", (cause) => stop(`Database reader failed: ${cause.message}`));
+    worker.on("error", (cause) =>
+      stop(`Database reader failed: ${cause instanceof Error ? cause.message : String(cause)}`),
+    );
     worker.on("exit", (code) => stop(`Database reader exited with code ${code}`));
 
     const request = (input: ReaderRequest) =>
@@ -776,7 +778,7 @@ const startCheckpointWorker = Effect.fnUntraced(function* (
     request();
     wake();
   };
-  worker.on("error", (cause) => handBack(cause.message));
+  worker.on("error", (cause) => handBack(cause instanceof Error ? cause.message : String(cause)));
   worker.on("exit", (code) => handBack(`exited with code ${code}`));
   worker.on("message", (message: unknown) => {
     if (stopped || typeof message !== "object" || message === null || !("type" in message)) return;
@@ -1219,6 +1221,7 @@ const make = Effect.fn("makeWithDatabase")(function* (
     acquirer: transactionAcquirer,
     borrower,
     compiler,
+    driver: "node:sqlite",
     transactionAcquirer,
     // A deferred BEGIN only takes the write lock at the first write. If another
     // process commits after this transaction's first read, that write fails at
