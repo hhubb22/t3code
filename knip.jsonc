@@ -120,6 +120,9 @@
       // These workspace packages are private to this monorepo.
       "includeEntryExports": true,
     },
+    "packages/provider-acp-registry": {
+      "entry": ["scripts/convert-kiro-replay.mjs"],
+    },
     "packages/effect-acp": {
       "includeEntryExports": true,
       "entry": ["test/fixtures/*.ts"],

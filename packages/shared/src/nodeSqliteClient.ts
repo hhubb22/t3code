@@ -1221,7 +1221,8 @@ const make = Effect.fn("makeWithDatabase")(function* (
     acquirer: transactionAcquirer,
     borrower,
     compiler,
-    driver: "node:sqlite",
+    // oxlint-disable-next-line unicorn/no-useless-spread -- Effect 4.0.5 omits driver; 4.0.6 requires it.
+    ...{ driver: "node:sqlite" },
     transactionAcquirer,
     // A deferred BEGIN only takes the write lock at the first write. If another
     // process commits after this transaction's first read, that write fails at

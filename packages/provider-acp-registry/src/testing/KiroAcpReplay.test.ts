@@ -36,13 +36,11 @@ import {
   decodeAcpReplayTranscript,
   makeAcpReplayCompletenessAssertion,
   makeAcpReplayRuntime,
+  layerAcpReplaySpawner,
   makeTurnInput,
-} from "./AcpAdapterV2.testkit.ts";
+} from "./acpReplay.ts";
 
-const fixtureDirectory = new URL(
-  "../../../../../packages/provider-acp-registry/src/testing/fixtures/kiro/",
-  import.meta.url,
-);
+const fixtureDirectory = new URL("./fixtures/kiro/", import.meta.url);
 const NATIVE_SESSION_ID = "native-session-1";
 const decodeSettings = Schema.decodeUnknownSync(AcpRegistrySettings);
 
@@ -160,16 +158,16 @@ const openKiro = Effect.fn("KiroAcpReplay.open")(function* (input: {
     },
     ACP_REGISTRY_PROVIDER,
   );
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const replayContext = yield* Layer.build(layerAcpReplaySpawner(transcript, { statusPath }));
+  const spawner = yield* Effect.service(ChildProcessSpawner.ChildProcessSpawner).pipe(
+    Effect.provide(replayContext),
+  );
   const promptStarted = input.promptStarted;
   const responseSent = input.responseSent;
   const instanceId = ProviderInstanceId.make(`kiro-${input.scenario}`);
   const makeRuntime = makeAcpReplayRuntime({
     transcript,
     statusPath,
-    scriptPath: yield* path.fromFileUrl(
-      new URL("../../../scripts/acp-replay-agent.ts", import.meta.url),
-    ),
     childProcessSpawner: spawner,
     fileSystem,
     ...(input.replayGate === undefined ? {} : { replayGate: input.replayGate }),

@@ -19,6 +19,18 @@
       "types": "./src/testing.ts",
       "import": "./src/testing.ts"
     },
+    "./server/status": {
+      "types": "./src/server/status.ts",
+      "import": "./src/server/status.ts"
+    },
+    "./testing/replay": {
+      "types": "./src/testing/acpReplay.ts",
+      "import": "./src/testing/acpReplay.ts"
+    },
+    "./testing/acp-replay-agent": {
+      "types": "./src/testing/acp-replay-agent.ts",
+      "import": "./src/testing/acp-replay-agent.ts"
+    },
     "./server/AcpRegistrySupport": {
       "types": "./src/server/AcpRegistrySupport.ts",
       "import": "./src/server/AcpRegistrySupport.ts"

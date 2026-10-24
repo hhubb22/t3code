@@ -13,9 +13,8 @@ import * as ProviderAdapterRegistry from "../ProviderAdapterRegistry.ts";
 import type { OrchestratorV2ProviderReplayHarness } from "../testkit/ProviderReplayHarness.ts";
 import { CursorAdapterV2Driver } from "@t3tools/provider-cursor/server";
 import * as CursorAgentSdk from "@t3tools/provider-cursor/server/CursorAgentSdk";
+import { CURSOR_DEFAULT_INSTANCE_ID, CURSOR_DRIVER_KIND } from "@t3tools/provider-cursor/testing";
 import {
-  CURSOR_DEFAULT_INSTANCE_ID,
-  CURSOR_DRIVER_KIND,
   decodeCursorAgentSdkReplayTranscript,
   layerCursorAgentSdkReplay,
   CursorAgentSdkReplayError,
