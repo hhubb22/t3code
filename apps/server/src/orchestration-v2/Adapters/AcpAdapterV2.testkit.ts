@@ -219,9 +219,12 @@ export function makeAcpReplayRuntime(input: {
               }),
           ),
         );
+      const { beforeLoadSession, newSessionMeta, ...sessionInput } = runtimeInput;
       const context = yield* Layer.build(
         AcpSessionRuntime.layer({
-          ...runtimeInput,
+          ...sessionInput,
+          ...(beforeLoadSession === undefined ? {} : { beforeLoadSession }),
+          ...(newSessionMeta === undefined ? {} : { newSessionMeta }),
           spawn: {
             command: process.execPath,
             args: acpReplayAgentArgs(input.scriptPath),

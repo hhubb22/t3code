@@ -14,6 +14,13 @@ import {
   extractCopilotSubagentUpdate,
   makeCopilotSubagentRouting,
 } from "./copilotAcp.ts";
+import {
+  canonicalKiroWorkspace,
+  confirmKiroSessionPresent,
+  isKiroAcpSettings,
+  kiroCapabilityOverrides,
+  kiroNewSessionMeta,
+} from "./kiroAcp.ts";
 import { defaultInstanceIdForDriver, ProviderDriverKind } from "@t3tools/contracts";
 import { readCustomModelEntries } from "@t3tools/shared/model";
 import { AcpRegistrySettings } from "../settings.ts";
@@ -141,7 +148,7 @@ function makeAcpRegistryRuntime(
     ChildProcessSpawner.ChildProcessSpawner | Crypto.Crypto | Scope.Scope
   > =>
     Effect.gen(function* () {
-      const { processEnvironment, ...runtimeInput } = input;
+      const { processEnvironment, beforeLoadSession, newSessionMeta, ...runtimeInput } = input;
       const resolved = yield* catalog
         .resolve(options.settings, input.cwd, options.environment)
         .pipe(
@@ -156,6 +163,8 @@ function makeAcpRegistryRuntime(
       const context = yield* Layer.build(
         AcpSessionRuntime.layer({
           ...runtimeInput,
+          ...(beforeLoadSession === undefined ? {} : { beforeLoadSession }),
+          ...(newSessionMeta === undefined ? {} : { newSessionMeta }),
           spawn:
             processEnvironment === undefined
               ? resolved.spawn
@@ -197,6 +206,7 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
       /^claude-agent-acp(\.exe|\.cmd)?$/i.test(
         options.settings.commandPath.split(/[\\/]/).pop() ?? "",
       ));
+  const isKiro = isKiroAcpSettings(options.settings);
   const runtimeOptions = isClaude
     ? {
         ...options,
@@ -208,9 +218,32 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
       }
     : options;
   const copilotRouting = isCopilot ? makeCopilotSubagentRouting() : undefined;
+  const baseMakeRuntime = options.makeRuntime ?? makeAcpRegistryRuntime(runtimeOptions, catalog);
+  // Kiro compares the session workspace with its canonical path. A symlink
+  // such as macOS /tmp would otherwise fail every later load.
+  const makeRuntime: AcpAdapterV2Flavor["makeRuntime"] = isKiro
+    ? (input) =>
+        Effect.gen(function* () {
+          const cwd = yield* canonicalKiroWorkspace(input.cwd);
+          return yield* baseMakeRuntime(cwd === input.cwd ? input : { ...input, cwd });
+        })
+    : baseMakeRuntime;
   const flavor: AcpAdapterV2Flavor = {
     driver: ACP_REGISTRY_PROVIDER,
-    capabilities: AcpProviderCapabilitiesV2,
+    capabilities: isKiro
+      ? {
+          ...AcpProviderCapabilitiesV2,
+          sessions: {
+            ...AcpProviderCapabilitiesV2.sessions,
+            ...kiroCapabilityOverrides.sessions,
+          },
+          threads: {
+            ...AcpProviderCapabilitiesV2.threads,
+            ...kiroCapabilityOverrides.threads,
+          },
+          turns: { ...AcpProviderCapabilitiesV2.turns, ...kiroCapabilityOverrides.turns },
+        }
+      : AcpProviderCapabilitiesV2,
     customModels: readCustomModelEntries(options.settings.customModels).map((entry) => entry.slug),
     promptFailure: (cause) => acpRegistryPromptFailure(registryAgentId, cause),
     ...(registryAgentId === "factory-droid"
@@ -246,7 +279,17 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
           normalizeSessionUpdate: copilotRouting.normalizeSessionUpdate,
           extractSubagentUpdate: extractCopilotSubagentUpdate,
         }),
-    makeRuntime: options.makeRuntime ?? makeAcpRegistryRuntime(runtimeOptions, catalog),
+    ...(isKiro
+      ? {
+          runtimeHarness: "Kiro",
+          followAdvertisedModelSwitch: false,
+          followAdvertisedFork: false,
+          failClosedOnSessionLoad: true,
+          newSessionMeta: kiroNewSessionMeta,
+          beforeLoadSession: confirmKiroSessionPresent,
+        }
+      : {}),
+    makeRuntime,
     ...(runtimeCoordinator === undefined
       ? {}
       : {

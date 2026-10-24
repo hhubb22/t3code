@@ -1492,6 +1492,45 @@ describe("AcpRegistrySupport", () => {
       ),
     );
   });
+
+  it.effect("launches registered Kiro with the V3 ACP engine and skips the catalog", () => {
+    let requests = 0;
+    return Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const cacheDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-acp-registry-kiro-",
+      });
+      const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog({
+        cacheDir,
+        toolsDir: `${cacheDir}/tools`,
+        registryUrl,
+      }).pipe(Effect.provideService(SpawnExecutableResolution, () => "/usr/local/bin/kiro-cli"));
+      const resolved = yield* resolver.resolve(settings({ agentId: "kiro" }), "/workspace");
+      const inspection = yield* resolver.inspect(settings({ agentId: "kiro" }));
+
+      expect(resolved.spawn).toMatchObject({
+        command: "/usr/local/bin/kiro-cli",
+        args: ["acp", "--agent-engine=v3"],
+        cwd: "/workspace",
+        shell: false,
+      });
+      expect(inspection).toEqual({
+        status: "ready",
+        agentId: "kiro",
+        version: null,
+        distribution: "local",
+      });
+      expect(requests).toBe(0);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        layerResolver(() => {
+          requests += 1;
+          return Effect.die("Kiro must not fetch the ACP registry");
+        }),
+      ),
+    );
+  });
 });
 
 describe("acpRegistryManagedBinaryDirectories", () => {

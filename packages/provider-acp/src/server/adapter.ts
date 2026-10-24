@@ -149,6 +149,10 @@ export interface AcpAdapterV2RuntimeInput {
   readonly acpMcpServers?: ReadonlyArray<EffectAcpSchema.McpServer>;
   readonly processEnvironment?: NodeJS.ProcessEnv;
   readonly resumeSessionId?: string;
+  readonly newSessionMeta?: EffectAcpSchema.NewSessionRequest["_meta"] | undefined;
+  readonly beforeLoadSession?:
+    | AcpSessionRuntime.AcpSessionRuntimeOptions["beforeLoadSession"]
+    | undefined;
   readonly interruptPromptOnCancel?: boolean;
   readonly clientCapabilities: EffectAcpSchema.InitializeRequest["clientCapabilities"];
   readonly clientInfo: AcpSessionRuntime.AcpSessionRuntimeOptions["clientInfo"];
@@ -263,6 +267,22 @@ export interface AcpAdapterV2Flavor {
     ChildProcessSpawner.ChildProcessSpawner | Crypto.Crypto | Scope.Scope
   >;
   readonly customModels?: ReadonlyArray<string>;
+  readonly newSessionMeta?: (
+    modelId: string | undefined,
+  ) => EffectAcpSchema.NewSessionRequest["_meta"] | undefined;
+  readonly beforeLoadSession?: AcpSessionRuntime.AcpSessionRuntimeOptions["beforeLoadSession"];
+  /**
+   * When false, an advertised model config option does not turn on in-session
+   * model switching. Kiro only accepts the model on session/new.
+   */
+  readonly followAdvertisedModelSwitch?: boolean;
+  /** When false, an advertised fork capability stays unreported. */
+  readonly followAdvertisedFork?: boolean;
+  /**
+   * A failed session/load or session/resume stays failed. The generic ACP
+   * fallback opens a fresh session so the runtime can come up.
+   */
+  readonly failClosedOnSessionLoad?: boolean;
   readonly resolveModelId?: (selection: ModelSelection) => string | undefined;
   readonly getModelContextWindow?: (
     selection: ModelSelection,
@@ -568,14 +588,20 @@ export const AcpProviderCapabilitiesV2 = {
 function negotiatedCapabilities(
   base: OrchestrationV2ProviderCapabilities,
   started: AcpSessionRuntime.AcpSessionRuntimeStartResult,
+  overrides?: {
+    readonly followAdvertisedModelSwitch?: boolean;
+    readonly followAdvertisedFork?: boolean;
+  },
 ): OrchestrationV2ProviderCapabilities {
   const agent = started.initializeResult.agentCapabilities ?? {};
   const session = agent.sessionCapabilities;
   const setup = started.sessionSetupResult;
   const canSwitchModel =
-    findModelConfigOption(setup.configOptions) !== undefined || setup.models != null;
+    overrides?.followAdvertisedModelSwitch === false
+      ? false
+      : findModelConfigOption(setup.configOptions) !== undefined || setup.models != null;
   const canLoad = agent.loadSession === true;
-  const canFork = session?.fork != null;
+  const canFork = overrides?.followAdvertisedFork === false ? false : session?.fork != null;
   return {
     ...base,
     sessions: {
@@ -2008,6 +2034,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                 );
             }),
           ).pipe(Effect.asVoid);
+        let requestedModelId = input.modelSelection.model;
         const makeRuntimeInput = (
           runtimeGeneration: number,
           mcpContext: AcpMcpContext,
@@ -2015,6 +2042,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           onTermination: AcpAdapterV2RuntimeInput["onTermination"] = () =>
             handleRuntimeTerminationAtGeneration(runtimeGeneration),
         ): AcpAdapterV2RuntimeInput => {
+          const newSessionMeta = flavor.newSessionMeta?.(requestedModelId);
           return {
             cwd: input.runtimePolicy.cwd ?? process.cwd(),
             runtimePolicy: input.runtimePolicy,
@@ -2102,6 +2130,10 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               logOutgoing: true,
               logger: () => Effect.void,
             },
+            ...(newSessionMeta === undefined ? {} : { newSessionMeta }),
+            ...(flavor.beforeLoadSession === undefined
+              ? {}
+              : { beforeLoadSession: flavor.beforeLoadSession }),
           };
         };
         let runtimeScope: Scope.Closeable | undefined;
@@ -6579,6 +6611,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               const failedMethod =
                 "method" in initialStart.failure ? initialStart.failure.method : undefined;
               if (
+                flavor.failClosedOnSessionLoad === true ||
                 input.initialNativeThreadId === undefined ||
                 (failedMethod !== "session/load" && failedMethod !== "session/resume")
               ) {
@@ -6596,7 +6629,14 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
         yield* Ref.set(activeSessionId, started.sessionId);
         yield* setActiveSessionSetup(started);
         rememberTerminalEnvironment(started.sessionId, yield* readMcpContext(input.threadId));
-        const capabilities = negotiatedCapabilities(flavor.capabilities, started);
+        const capabilities = negotiatedCapabilities(flavor.capabilities, started, {
+          ...(flavor.followAdvertisedModelSwitch === undefined
+            ? {}
+            : { followAdvertisedModelSwitch: flavor.followAdvertisedModelSwitch }),
+          ...(flavor.followAdvertisedFork === undefined
+            ? {}
+            : { followAdvertisedFork: flavor.followAdvertisedFork }),
+        });
         const canLoadSession = started.initializeResult.agentCapabilities?.loadSession === true;
         const canResumeSession =
           started.initializeResult.agentCapabilities?.sessionCapabilities?.resume != null;
@@ -7257,6 +7297,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
 
         const startTurnUnlocked = Effect.fn("AcpAdapterV2.startTurn")(
           function* (turnInput: ProviderAdapter.ProviderAdapterV2TurnInput) {
+            requestedModelId = turnInput.modelSelection.model;
             yield* awaitRuntimeTeardown();
             const existing = yield* Ref.get(activeTurn);
             if (existing !== null) {
@@ -7810,6 +7851,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               readonly modelSelection?: ModelSelection;
               readonly runtimePolicy?: ProviderAdapter.ProviderAdapterV2RuntimePolicy;
             }) {
+              if (threadInput.modelSelection !== undefined) {
+                requestedModelId = threadInput.modelSelection.model;
+              }
               return yield* runtimeTransitionPermit.withPermit(
                 Effect.gen(function* () {
                   yield* awaitRuntimeTeardown();
