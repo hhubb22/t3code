@@ -16,8 +16,12 @@
       "import": "./src/server.ts"
     },
     "./testing": {
-      "types": "./src/testing.ts",
-      "import": "./src/testing.ts"
+      "types": "./src/testing/index.ts",
+      "import": "./src/testing/index.ts"
+    },
+    "./testing/replay": {
+      "types": "./src/testing/replayTranscript.ts",
+      "import": "./src/testing/replayTranscript.ts"
     },
     "./server/CursorAgentSdk": {
       "types": "./src/server/CursorAgentSdk.ts",
