@@ -2704,6 +2704,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           const startedAt = context.toolStartedAt.get(key) ?? now;
           context.toolStartedAt.set(key, startedAt);
           const ordinal = resolveSubagentChildOrdinal(subagent, key);
+          const nativeToolId = unknownRecord(unknownRecord(merged.data.meta)?.kiro)?.toolId;
           yield* emitProviderEvent({
             type: "turn_item.updated",
             driver,
@@ -2739,8 +2740,13 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                 mcpIdentity === undefined
                   ? (merged.title ?? merged.kind ?? "Tool")
                   : `${mcpIdentity.server}.${mcpIdentity.tool}`,
-              input: merged.data.rawInput ?? null,
-              output: merged.data.rawOutput ?? merged.data.content ?? null,
+              ...(typeof nativeToolId === "string" && nativeToolId.trim()
+                ? { nativeToolId: nativeToolId.trim() }
+                : {}),
+              ...(merged.data.rawInput === undefined ? {} : { input: merged.data.rawInput }),
+              ...(merged.data.rawOutput === undefined && merged.data.content === undefined
+                ? {}
+                : { output: merged.data.rawOutput ?? merged.data.content }),
             },
           });
         });
@@ -3931,11 +3937,17 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                     ...(exitCode === undefined ? {} : { exitCode }),
                   };
                 } else {
+                  const nativeToolId = unknownRecord(
+                    unknownRecord(toolCall.data.meta)?.kiro,
+                  )?.toolId;
                   turnItem = {
                     ...base,
                     type: "dynamic_tool",
                     toolName: toolCall.title ?? toolCall.kind ?? null,
-                    input: rawInput ?? {},
+                    ...(typeof nativeToolId === "string" && nativeToolId.trim()
+                      ? { nativeToolId: nativeToolId.trim() }
+                      : {}),
+                    ...(rawInput === undefined ? {} : { input: rawInput }),
                     ...(rawOutput === undefined ? {} : { output: rawOutput }),
                   };
                 }

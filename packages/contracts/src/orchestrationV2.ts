@@ -1538,8 +1538,9 @@ export const OrchestrationV2TurnItem = Schema.Union([
     ...OrchestrationV2TurnItemBaseFields,
     type: Schema.Literal("dynamic_tool"),
     toolName: Schema.NullOr(TrimmedNonEmptyString),
+    nativeToolId: Schema.optional(TrimmedNonEmptyString),
     viewedImagePath: Schema.optional(TrimmedNonEmptyString),
-    input: Schema.Unknown,
+    input: Schema.optional(Schema.Unknown),
     output: Schema.optional(Schema.Unknown),
     /** Set on the wire when output was withheld; fetch it with getTurnItem. */
     outputOmitted: Schema.optional(Schema.Boolean),
@@ -2301,8 +2302,9 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     ...OrchestrationV2TurnItemJsonBaseFields,
     type: Schema.Literal("dynamic_tool"),
     toolName: Schema.NullOr(TrimmedNonEmptyString),
+    nativeToolId: Schema.optional(TrimmedNonEmptyString),
     viewedImagePath: Schema.optional(TrimmedNonEmptyString),
-    input: Schema.Unknown,
+    input: Schema.optional(Schema.Unknown),
     output: Schema.optional(Schema.Unknown),
     /** Set on the wire when output was withheld; fetch it with getTurnItem. */
     outputOmitted: Schema.optional(Schema.Boolean),
