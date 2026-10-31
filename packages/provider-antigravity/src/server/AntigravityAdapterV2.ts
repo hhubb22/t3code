@@ -15,17 +15,15 @@ import * as Scope from "effect/Scope";
 import * as EffectAcpErrors from "effect-acp/errors";
 
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
-import type { AntigravityAuth } from "../../provider/AntigravityAuth.ts";
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import {
   antigravityPermissionMode,
   applyAntigravityAcpModelSelection,
-  type AntigravityAcpRuntimeInput,
-} from "../../provider/acp/AntigravityAcpSupport.ts";
+} from "./AntigravityModelSelection.ts";
 import {
   readAntigravityClientTextFile,
   writeAntigravityClientTextFile,
-} from "../../provider/acp/AntigravityClientFiles.ts";
+} from "./AntigravityClientFiles.ts";
 import {
   antigravityApprovalOptions,
   antigravitySubagentOutput,
@@ -33,7 +31,7 @@ import {
   extractAntigravityUserInputQuestion,
   makeAntigravityUserInputResponse,
   normalizeAntigravityToolCall,
-} from "../../provider/acp/AntigravityProtocol.ts";
+} from "./AntigravityProtocol.ts";
 import {
   AcpProviderCapabilitiesV2,
   makeAcpAdapterV2,
@@ -60,17 +58,26 @@ const AntigravityProviderCapabilitiesV2 = {
   },
 } satisfies OrchestrationV2ProviderCapabilities;
 
+export type AntigravityAdapterRuntimeInput = AcpAdapterV2RuntimeInput & {
+  readonly clientFileSystem: boolean;
+  readonly additionalDirectories: ReadonlyArray<string>;
+};
+
 export interface AntigravityAdapterV2Options {
   readonly instanceId: ProviderInstanceId;
   readonly selfInvocation: SelfInvocation;
   readonly makeRuntime: (
-    input: Omit<AntigravityAcpRuntimeInput, "spawn" | "childProcessSpawner">,
+    input: AntigravityAdapterRuntimeInput,
   ) => Effect.Effect<
     AcpSessionRuntime.AcpSessionRuntime["Service"],
     EffectAcpErrors.AcpError | ProviderSetupError,
     Scope.Scope
   >;
-  readonly withProcess: AntigravityAuth["withProcess"];
+  /** Lets a host serialize process startup with its own sign-in flow. */
+  readonly withProcess: <A, E, R>(
+    stop: Effect.Effect<void>,
+    task: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | ProviderSetupError, R | Scope.Scope>;
   readonly defaultModel: Effect.Effect<string | undefined>;
   readonly onSessionStarted?: (
     started: AcpSessionRuntime.AcpSessionRuntimeStartResult,
@@ -168,13 +175,18 @@ export function makeAntigravityAcpAdapterFlavor(
       modelSelection,
     }) {
       const defaultModel = yield* options.defaultModel;
-      return yield* applyAntigravityAcpModelSelection({
+      const model = yield* applyAntigravityAcpModelSelection({
         runtime,
         model:
           modelSelection.model === ANTIGRAVITY_DEFAULT_MODEL ? undefined : modelSelection.model,
         defaultModel,
         mapError: (cause) => cause,
       });
+      const thoughtLevel = modelSelection.options?.find((option) => option.id === "thought_level");
+      if (thoughtLevel !== undefined) {
+        yield* runtime.setConfigOption("thought_level", thoughtLevel.value);
+      }
+      return model;
     }),
     sessionModeForPolicy: (policy) => antigravityPermissionMode(policy.runtimeMode),
     clientFileSystem: {

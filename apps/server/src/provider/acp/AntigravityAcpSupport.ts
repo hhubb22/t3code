@@ -1,10 +1,8 @@
 import {
-  ANTIGRAVITY_DEFAULT_MODEL,
   type AntigravityAuthMethod,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   type ProviderSendTurnInput,
-  type RuntimeMode,
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -23,7 +21,7 @@ import {
   makeAntigravityStdoutTransform,
 } from "../antigravityAuthSupport.ts";
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
-import { normalizeAntigravitySessionUpdate } from "./AntigravityProtocol.ts";
+import { normalizeAntigravitySessionUpdate } from "@t3tools/provider-antigravity/server/AntigravityProtocol";
 
 export interface AntigravityAcpRuntimeInput extends Omit<
   AcpSessionRuntime.AcpSessionRuntimeOptions,
@@ -80,75 +78,10 @@ export const makeAntigravityAcpRuntime = Effect.fn("makeAntigravityAcpRuntime")(
   return yield* Effect.service(AcpSessionRuntime.AcpSessionRuntime).pipe(Effect.provide(context));
 });
 
-export function antigravityPermissionMode(runtimeMode: RuntimeMode): string {
-  switch (runtimeMode) {
-    case "full-access":
-      return "yolo";
-    case "auto-accept-edits":
-      return "auto_edit";
-    case "auto":
-    case "approval-required":
-      return "default";
-  }
-}
-
-function antigravityModelOptions(
-  configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>,
-) {
-  const model = configOptions.find((option) => option.id === "model");
-  if (model?.type !== "select") return [];
-  return model.options.flatMap((entry) => ("value" in entry ? [entry] : entry.options));
-}
-
-function resolveAntigravityModel(input: {
-  readonly configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>;
-  readonly model: string | null | undefined;
-  readonly defaultModel?: string | undefined;
-}): string | undefined {
-  const modelConfig = input.configOptions.find((option) => option.id === "model");
-  const current = modelConfig?.type === "select" ? modelConfig.currentValue : undefined;
-  if (input.model && input.model !== ANTIGRAVITY_DEFAULT_MODEL) return input.model;
-  const options = antigravityModelOptions(input.configOptions);
-  return input.defaultModel && options.some((option) => option.value === input.defaultModel)
-    ? input.defaultModel
-    : current;
-}
-
-/** Never replace a saved selection with the default returned by a cold resume. */
-export const applyAntigravityAcpModelSelection = Effect.fn("applyAntigravityAcpModelSelection")(
-  function* <E>(input: {
-    readonly runtime: Pick<
-      AcpSessionRuntime.AcpSessionRuntime["Service"],
-      "getConfigOptions" | "setModel"
-    >;
-    readonly model: string | null | undefined;
-    readonly defaultModel?: string | undefined;
-    readonly mapError: (cause: EffectAcpErrors.AcpError) => E;
-  }): Effect.fn.Return<string | undefined, E> {
-    const configOptions = yield* input.runtime.getConfigOptions;
-    const modelConfig = configOptions.find((option) => option.id === "model");
-    const current = modelConfig?.type === "select" ? modelConfig.currentValue : undefined;
-    const resolved = resolveAntigravityModel({
-      configOptions,
-      model: input.model,
-      defaultModel: input.defaultModel,
-    });
-    const explicit = Boolean(input.model) && input.model !== ANTIGRAVITY_DEFAULT_MODEL;
-    if (resolved === undefined || (!explicit && resolved === current)) return current;
-    const options = antigravityModelOptions(configOptions);
-    if (!options.some((option) => option.value === resolved)) {
-      return yield* Effect.fail(
-        input.mapError(
-          EffectAcpErrors.AcpRequestError.invalidParams(
-            `Antigravity model '${resolved}' is unavailable for this Google account. Select an available model.`,
-          ),
-        ),
-      );
-    }
-    yield* input.runtime.setModel(resolved).pipe(Effect.mapError(input.mapError));
-    return resolved;
-  },
-);
+export {
+  antigravityPermissionMode,
+  applyAntigravityAcpModelSelection,
+} from "@t3tools/provider-antigravity/server/AntigravityModelSelection";
 
 const IMAGE_MIME_TYPES = new Set(["image/bmp", "image/jpeg", "image/png", "image/webp"]);
 const AUDIO_MIME_TYPES = new Set([

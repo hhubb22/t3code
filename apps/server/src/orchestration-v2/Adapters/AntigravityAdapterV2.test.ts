@@ -28,13 +28,13 @@ import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderS
 import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import { makeAntigravityAcpRuntime } from "../../provider/acp/AntigravityAcpSupport.ts";
-import { normalizeAntigravitySessionUpdate } from "../../provider/acp/AntigravityProtocol.ts";
+import { normalizeAntigravitySessionUpdate } from "@t3tools/provider-antigravity/server/AntigravityProtocol";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import {
   makeAntigravityAcpAdapterFlavor,
   makeAntigravityAdapterV2,
-} from "./AntigravityAdapterV2.ts";
+} from "@t3tools/provider-antigravity/server/AntigravityAdapterV2";
 
 const flavor = makeAntigravityAcpAdapterFlavor({
   instanceId: ProviderInstanceId.make("antigravity-test"),

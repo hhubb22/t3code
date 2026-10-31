@@ -1,0 +1,35 @@
+{
+  "name": "@t3tools/provider-antigravity",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./server/AntigravityAdapterV2": {
+      "types": "./src/server/AntigravityAdapterV2.ts",
+      "import": "./src/server/AntigravityAdapterV2.ts"
+    },
+    "./server/AntigravityModelSelection": {
+      "types": "./src/server/AntigravityModelSelection.ts",
+      "import": "./src/server/AntigravityModelSelection.ts"
+    },
+    "./server/AntigravityProtocol": {
+      "types": "./src/server/AntigravityProtocol.ts",
+      "import": "./src/server/AntigravityProtocol.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run --config ../../vite.config.ts --dir ."
+  },
+  "dependencies": {
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/provider-acp": "workspace:*",
+    "@t3tools/provider-core": "workspace:*",
+    "@t3tools/shared": "workspace:*",
+    "effect": "catalog:",
+    "effect-acp": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
