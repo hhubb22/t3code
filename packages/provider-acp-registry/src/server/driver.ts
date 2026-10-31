@@ -114,7 +114,10 @@ function modelsFromDiscovery(
           name: model.name,
           isCustom: false,
           ...(model.id === discovery?.currentModelId ? { isDefault: true } : {}),
-          capabilities,
+          capabilities:
+            model.configOptions === undefined
+              ? capabilities
+              : createModelCapabilities({ optionDescriptors: model.configOptions }),
         }));
   return providerModelsFromSettings(builtInModels, customModels, capabilities);
 }

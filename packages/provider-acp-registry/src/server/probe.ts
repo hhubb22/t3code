@@ -35,6 +35,7 @@ import {
 } from "@t3tools/provider-acp/server/sessionConfig";
 import * as AcpRegistryRuntimeCoordinator from "./AcpRegistryRuntimeCoordinator.ts";
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
+import { isKiroAcpSettings } from "./kiroAcp.ts";
 
 const MAX_AUTH_METHODS = 32;
 const MAX_MODELS = 256;
@@ -314,6 +315,30 @@ export type AcpRegistryConfigurationProbe<Requirements = never> = (
   input: AcpRegistryConfigurationProbeInput,
 ) => Effect.Effect<AcpRegistryConfigurationProbeResult, AcpRegistryOperationError, Requirements>;
 
+// Kiro offers effortLevel only on some models, so the session's options describe
+// the current model alone. A model that rejects the switch keeps the shared options.
+const kiroModelConfigOptions = Effect.fn("AcpRegistryProbe.kiroModelConfigOptions")(function* (
+  runtime: AcpSessionRuntime.AcpSessionRuntime["Service"],
+  started: AcpSessionRuntime.AcpSessionRuntimeStartResult,
+) {
+  const modeState = parseSessionModeState(started.sessionSetupResult);
+  const modelOption = findModelConfigOption(yield* runtime.getConfigOptions);
+  const configOptions = new Map<string, AcpRegistryProbeResult["configOptions"]>();
+  if (modelOption?.type !== "select") return configOptions;
+  for (const { value } of flattenSelectChoices(modelOption.options)) {
+    const switched = yield* Effect.result(runtime.setConfigOption(modelOption.id, value));
+    if (Result.isFailure(switched)) continue;
+    configOptions.set(
+      value,
+      acpProviderOptionDescriptors({
+        configOptions: switched.success.configOptions ?? [],
+        modeState,
+      }),
+    );
+  }
+  return configOptions;
+});
+
 export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeConfiguration")(
   function* (
     input: AcpRegistryConfigurationProbeInput,
@@ -426,7 +451,10 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
       yield* Deferred.await(commandsAdvertised).pipe(
         Effect.timeoutOption(COMMAND_ADVERTISEMENT_GRACE),
       );
-      return { resolved, started, commands: yield* Ref.get(commandsRef) };
+      const modelConfigOptions = isKiroAcpSettings(input.settings)
+        ? yield* kiroModelConfigOptions(runtime, started)
+        : new Map<string, AcpRegistryProbeResult["configOptions"]>();
+      return { resolved, started, commands: yield* Ref.get(commandsRef), modelConfigOptions };
     }).pipe(
       Effect.scoped,
       Effect.timeoutOrElse({
@@ -443,16 +471,23 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
         error._tag === "AcpRegistryOperationError" ? error : acpRegistryProbeFailure(error),
       ),
     );
+    const probe = acpRegistryProbeResult(
+      input.instanceId,
+      result.started,
+      result.resolved.agent?.icon ?? null,
+      {
+        command: result.resolved.spawn.command,
+        args: result.resolved.spawn.args,
+      },
+    );
     return {
-      probe: acpRegistryProbeResult(
-        input.instanceId,
-        result.started,
-        result.resolved.agent?.icon ?? null,
-        {
-          command: result.resolved.spawn.command,
-          args: result.resolved.spawn.args,
-        },
-      ),
+      probe: AcpRegistryProbeResult.make({
+        ...probe,
+        models: probe.models.map((model) => {
+          const configOptions = result.modelConfigOptions.get(model.id);
+          return configOptions === undefined ? model : { ...model, configOptions };
+        }),
+      }),
       slashCommands: result.commands.slashCommands,
       skills: result.commands.skills,
     };
