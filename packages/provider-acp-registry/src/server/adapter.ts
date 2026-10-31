@@ -8,7 +8,11 @@ import {
   normalizeDevinToolCall,
   extractDevinSubagentUpdate,
 } from "./devinAcp.ts";
-import { extractDroidElicitationForm } from "./droidAcp.ts";
+import {
+  extractDroidElicitationForm,
+  isDroidAcpSettings,
+  droidSessionModeForPolicy,
+} from "./droidAcp.ts";
 import {
   copilotClientCapabilitiesMeta,
   extractCopilotSubagentUpdate,
@@ -207,6 +211,7 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
         options.settings.commandPath.split(/[\\/]/).pop() ?? "",
       ));
   const isKiro = isKiroAcpSettings(options.settings);
+  const isDroid = isDroidAcpSettings(options.settings);
   const runtimeOptions = isClaude
     ? {
         ...options,
@@ -246,8 +251,12 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
       : AcpProviderCapabilitiesV2,
     customModels: readCustomModelEntries(options.settings.customModels).map((entry) => entry.slug),
     promptFailure: (cause) => acpRegistryPromptFailure(registryAgentId, cause),
-    ...(registryAgentId === "factory-droid"
-      ? { extractElicitationForm: extractDroidElicitationForm }
+    ...(isDroid
+      ? {
+          failClosedOnSessionLoad: true,
+          extractElicitationForm: extractDroidElicitationForm,
+          sessionModeForPolicy: droidSessionModeForPolicy,
+        }
       : {}),
     ...(registryAgentId === "mistral-vibe"
       ? { registerExtensions: registerMistralVibeAcpExtensions }

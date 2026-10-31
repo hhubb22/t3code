@@ -1,7 +1,49 @@
-import { type OrchestrationV2UserInputQuestion, TrimmedNonEmptyString } from "@t3tools/contracts";
+import {
+  type OrchestrationV2UserInputQuestion,
+  type ProviderInteractionMode,
+  type RuntimeMode,
+  TrimmedNonEmptyString,
+} from "@t3tools/contracts";
 import type { AcpAdapterV2Flavor } from "@t3tools/provider-acp/server/adapter";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
+
+export const DROID_AGENT_ID = "factory-droid";
+export const DROID_ACP_ARGS = ["exec", "--output-format", "acp"] as const;
+
+function commandBasename(command: string): string {
+  const normalized = command.trim();
+  const slash = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+  return slash === -1 ? normalized : normalized.slice(slash + 1);
+}
+
+export function isDroidCliBasename(command: string): boolean {
+  return /^droid(?:\.exe|\.cmd)?$/i.test(commandBasename(command));
+}
+
+export function isDroidAcpSettings(settings: {
+  readonly agentId: string;
+  readonly commandPath: string;
+}): boolean {
+  return settings.agentId.trim() === DROID_AGENT_ID || isDroidCliBasename(settings.commandPath);
+}
+
+// Supervised and Auto-accept edits keep Droid's per-action approvals, which the
+// ACP client policy answers. Auto and Full access run without asking.
+export function droidSessionModeForPolicy(policy: {
+  readonly runtimeMode: RuntimeMode;
+  readonly interactionMode: ProviderInteractionMode;
+}): string | undefined {
+  if (policy.interactionMode === "plan") return "spec";
+  switch (policy.runtimeMode) {
+    case "approval-required":
+    case "auto-accept-edits":
+      return "normal";
+    case "auto":
+    case "full-access":
+      return "auto-high";
+  }
+}
 
 const isDroidForm = Schema.is(
   Schema.Struct({

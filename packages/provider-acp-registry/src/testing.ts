@@ -12,6 +12,14 @@ export {
 } from "./server/devinAcp.ts";
 export { extractCopilotSubagentUpdate, makeCopilotSubagentRouting } from "./server/copilotAcp.ts";
 export {
+  DROID_ACP_ARGS,
+  DROID_AGENT_ID,
+  droidSessionModeForPolicy,
+  extractDroidElicitationForm,
+  isDroidAcpSettings,
+  isDroidCliBasename,
+} from "./server/droidAcp.ts";
+export {
   acpRegistryProbeFailure,
   acpRegistryProbeResult,
   listAcpRegistrySessions,
